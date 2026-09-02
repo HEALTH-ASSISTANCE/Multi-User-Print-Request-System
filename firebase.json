@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "database": "print-app",
+    "rules": "firestore.rules"
+  },
+  "hosting": [
+    {
+      "target": "customer",
+      "public": "public/customer",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    },
+    {
+      "target": "admin",
+      "public": "public/admin",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    }
+  ]
+}

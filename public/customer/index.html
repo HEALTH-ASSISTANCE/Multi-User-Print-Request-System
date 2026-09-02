@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Print Assistance - Customer</title>
+    <style>
+        :root { --ink:#111; --paper:#fff; --soft:#f4f4f4; --muted:#666; --danger:#9b0000; }
+        * { box-sizing:border-box; }
+        body { margin:0; min-height:100vh; font-family:monospace; color:var(--ink); background:var(--soft); }
+        button,input,select { font:inherit; }
+        button { border:2px solid var(--ink); background:var(--paper); color:var(--ink); padding:10px 14px; font-weight:bold; cursor:pointer; }
+        button:hover,button.primary { background:var(--ink); color:var(--paper); }
+        button:disabled { opacity:.45; cursor:not-allowed; }
+        .app { display:flex; min-height:100vh; }
+        aside { width:220px; flex:0 0 220px; background:var(--ink); color:var(--paper); padding:22px 14px; }
+        .brand { margin:0 0 28px; padding-bottom:16px; border-bottom:2px solid var(--paper); font-size:22px; line-height:1.2; }
+        nav { display:grid; gap:8px; }
+        nav button { width:100%; text-align:left; background:transparent; color:var(--paper); border-color:var(--paper); }
+        nav button:hover,nav button.active { background:var(--paper); color:var(--ink); }
+        main { flex:1; padding:28px; min-width:0; }
+        .view { max-width:1040px; margin:0 auto; animation:show .2s ease-out; }
+        @keyframes show { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+        h1,h2 { border-bottom:2px solid var(--ink); padding-bottom:8px; }
+        .panel { background:var(--paper); border:2px solid var(--ink); padding:20px; margin-top:18px; }
+        .destination { border:2px solid var(--ink); background:var(--paper); padding:12px 16px; margin:14px 0 0; font-weight:bold; }
+        .destination.waiting { border-style:dashed; }
+        .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+        .full { grid-column:1/-1; }
+        label { display:block; font-weight:bold; margin-bottom:6px; }
+        input,select { width:100%; padding:10px; border:2px solid var(--ink); background:var(--paper); }
+        .hint { color:var(--muted); font-size:11px; margin-top:5px; }
+        .status { display:none; border:1px dashed var(--ink); padding:10px; margin-top:14px; }
+        .status.error { color:var(--danger); border-color:var(--danger); }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; min-width:900px; }
+        th,td { border:2px solid var(--ink); padding:10px; text-align:left; vertical-align:top; }
+        th { background:var(--ink); color:var(--paper); }
+        .empty { border:2px dashed var(--ink); padding:24px; }
+        @media(max-width:700px) { .app{display:block;} aside{width:100%;} nav{grid-template-columns:1fr 1fr;} main{padding:16px;} .grid{grid-template-columns:1fr;} .full{grid-column:auto;} }
+    </style>
+</head>
+<body>
+<div class="app">
+    <aside>
+        <h1 class="brand">PRINT<br>ASSISTANCE</h1>
+        <nav aria-label="Customer navigation">
+            <button data-view="submit" class="active">Submit a Print Request</button>
+            <button data-view="history">My Request History</button>
+        </nav>
+    </aside>
+    <main id="mainContent"></main>
+</div>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAQiP4c0V3KdElxiPmp85vNJz9fEgg5Cao",
+        authDomain: "print-request-system-bce8b.firebaseapp.com",
+        projectId: "print-request-system-bce8b",
+        appId: "1:292635239891:web:6c6a33bd14eca24c37bb26"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app, "print-app");
+    const auth = getAuth(app);
+    const mainContent = document.getElementById("mainContent");
+    const routeOperator = String(new URLSearchParams(location.search).get("operator") || "").trim().toLowerCase();
+    let activeView = "submit";
+    let myJobs = [];
+    let stopHistory = null;
+
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[char]));
+    const dateText = (value) => { if (!value) return "Not available"; const date = value.toDate ? value.toDate() : new Date(value); return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString(); };
+    const sortJobs = (snapshot) => snapshot.docs.map((item) => ({ id:item.id, ...item.data() })).sort((a,b) => ((b.submittedAt || b.timestamp)?.toMillis?.() || 0) - ((a.submittedAt || a.timestamp)?.toMillis?.() || 0));
+    const setStatus = (element, message, error = false) => { if (!element) return; element.textContent = message; element.style.display = "block"; element.classList.toggle("error", error); };
+
+    function renderSubmit() {
+        const hasDestination = /^[a-z0-9][a-z0-9._-]{2,38}$/.test(routeOperator);
+        const destination = hasDestination ? `<div class="destination">Send directly to operator: @${escapeHtml(routeOperator)}</div>` : `<div class="destination waiting">No operator selected. Scan the QR code provided by the operator who should receive your file.</div>`;
+        mainContent.innerHTML = `<section class="view"><h1>Submit a Print Request</h1>${destination}<form class="panel" id="requestForm"><div class="grid"><div class="full"><label for="requesterName">Your name</label><input id="requesterName" maxlength="80" required placeholder="Enter your name"><div class="hint">The selected operator will see this name with the request.</div></div><div class="full"><label for="pdfFile">Select Document (PDF only)</label><input id="pdfFile" type="file" accept="application/pdf,.pdf" required></div><div><label for="printCopies">Number of Copies</label><input id="printCopies" type="number" value="1" min="1" max="99" required></div><div><label for="printColor">Color Configuration</label><select id="printColor"><option value="Black & White">Black & White</option><option value="Full Color">Full Color</option></select></div><div><label for="printSides">Sides</label><select id="printSides"><option value="Single-Sided">Single-Sided</option><option value="Double-Sided (Duplex)">Double-Sided (Duplex)</option></select></div><div class="full"><button class="primary" type="submit" ${hasDestination ? "" : "disabled"}>Send Print Request</button><div id="requestStatus" class="status"></div></div></div></form></section>`;
+        document.getElementById("requestForm").addEventListener("submit", submitRequest);
+    }
+
+    function renderHistory() {
+        mainContent.innerHTML = `<section class="view"><div class="toolbar"><h1>My Request History</h1><button id="clearCustomerHistory">Clear History</button></div><div class="panel"><div class="table-wrap" id="historyArea"></div></div></section>`;
+        document.getElementById("clearCustomerHistory").addEventListener("click", clearCustomerHistory);
+        renderHistoryTable();
+    }
+
+    function renderHistoryTable() {
+        const area = document.getElementById("historyArea");
+        if (!area) return;
+        myJobs = myJobs.filter((job) => job.customerHidden !== true);
+        if (!myJobs.length) { area.innerHTML = "<div class=\"empty\">No requests yet.</div>"; return; }
+        area.innerHTML = `<table><thead><tr><th>Request</th><th>Document</th><th>Sent to</th><th>Submitted</th><th>Copies</th><th>Color</th><th>Sides</th><th>Status</th></tr></thead><tbody>${myJobs.map((job) => `<tr><td>${escapeHtml(job.requestCode || job.id.slice(0, 8).toUpperCase())}</td><td>${escapeHtml(job.fileName || "PDF")}</td><td>@${escapeHtml(job.recipientUsername || "Not assigned")}</td><td>${dateText(job.submittedAt || job.timestamp)}</td><td>${escapeHtml(job.copiesCount || "1")}</td><td>${escapeHtml(job.colorSetting || "Black & White")}</td><td>${escapeHtml(job.sidesSetting || "Single-Sided")}</td><td>${escapeHtml(job.status || "Pending")}</td></tr>`).join("")}</tbody></table>`;
+    }
+
+    async function clearCustomerHistory() {
+        if (!auth.currentUser || !myJobs.length || !confirm("Clear your request history from this sender view?")) return;
+        try {
+            await Promise.all(myJobs.filter((job) => job.customerHidden !== true).map((job) => updateDoc(doc(db, "print_jobs", job.id), { customerHidden:true })));
+            myJobs = [];
+            renderHistoryTable();
+        } catch (error) {
+            alert(`Could not clear history: ${error.message}`);
+        }
+    }
+
+    async function ensureCustomerSession() { if (auth.currentUser) return auth.currentUser; const credential = await signInAnonymously(auth); return credential.user; }
+
+    const makeRequestCode = () => `PA-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
+    async function submitRequest(event) {
+        event.preventDefault();
+        const status = document.getElementById("requestStatus");
+        const file = document.getElementById("pdfFile").files[0];
+        const requesterName = document.getElementById("requesterName").value.trim();
+        if (!routeOperator) return setStatus(status, "Open this page by scanning the receiving operator's QR code.", true);
+        if (!requesterName) return setStatus(status, "Please enter your name.", true);
+        if (!file || file.type !== "application/pdf") return setStatus(status, "Please select a PDF document.", true);
+        if (file.size > 700000) return setStatus(status, "PDF must be under 700 KB.", true);
+        try {
+            setStatus(status, "Preparing your request...");
+            const customer = await ensureCustomerSession();
+            const recipientSnapshot = await getDoc(doc(db, "operator_usernames", routeOperator));
+            if (!recipientSnapshot.exists() || recipientSnapshot.data().active === false) return setStatus(status, "This operator QR code is no longer active. Ask the operator for a new QR code.", true);
+            const recipient = recipientSnapshot.data();
+            const pdfDataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+            setStatus(status, `Sending directly to @${routeOperator}...`);
+            const requestCode = makeRequestCode();
+            await addDoc(collection(db, "print_jobs"), { requestCode, fileName:file.name, pdfDataUrl, requesterId:customer.uid, requesterName, submittedByName:requesterName, recipientOperatorId:recipient.operatorId, recipientUsername:routeOperator, copiesCount:document.getElementById("printCopies").value, colorSetting:document.getElementById("printColor").value, sidesSetting:document.getElementById("printSides").value, status:"Pending", submittedAt:serverTimestamp(), timestamp:serverTimestamp() });
+            setStatus(status, `Success: ${requestCode} was sent to @${routeOperator}.`);
+            document.getElementById("requestForm").reset();
+            document.getElementById("printCopies").value = "1";
+        } catch (error) { console.error(error); setStatus(status, `System failure: ${error.message}`, true); }
+    }
+
+    function startHistoryListener(user) {
+        if (stopHistory) stopHistory();
+        stopHistory = null;
+        myJobs = [];
+        if (!user) return;
+        stopHistory = onSnapshot(query(collection(db, "print_jobs"), where("requesterId", "==", user.uid)), (snapshot) => { myJobs = sortJobs(snapshot).filter((job) => job.customerHidden !== true); if (activeView === "history") renderHistoryTable(); }, (error) => console.error("Customer history listener failed", error));
+    }
+
+    function render() { document.querySelectorAll("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === activeView)); if (activeView === "history") renderHistory(); else { activeView = "submit"; renderSubmit(); } }
+    document.querySelectorAll("nav button").forEach((button) => button.addEventListener("click", () => { activeView = button.dataset.view; history.replaceState(null, "", location.pathname + location.search); render(); }));
+    onAuthStateChanged(auth, (user) => { startHistoryListener(user); if (activeView === "history") renderHistoryTable(); });
+    signInAnonymously(auth).catch((error) => console.error("Anonymous sign-in failed", error));
+    render();
+</script>
+</body>
+</html>

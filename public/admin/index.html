@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Print Assistance - Admin</title>
+    <style>
+        :root { --ink:#111; --paper:#fff; --soft:#f4f4f4; --muted:#666; --danger:#9b0000; }
+        * { box-sizing:border-box; }
+        body { margin:0; min-height:100vh; font-family:monospace; color:var(--ink); background:var(--soft); }
+        button,input,select { font:inherit; }
+        button { border:2px solid var(--ink); background:var(--paper); color:var(--ink); padding:10px 14px; font-weight:bold; cursor:pointer; }
+        button:hover,button.primary { background:var(--ink); color:var(--paper); }
+        .app { display:flex; min-height:100vh; }
+        aside { width:240px; flex:0 0 240px; background:var(--ink); color:var(--paper); padding:22px 14px; }
+        .brand { margin:0 0 28px; padding-bottom:16px; border-bottom:2px solid var(--paper); font-size:22px; line-height:1.2; }
+        .admin-label { display:block; margin-top:8px; font-size:11px; font-weight:normal; opacity:.72; }
+        nav { display:grid; gap:8px; }
+        nav button { width:100%; text-align:left; background:transparent; color:var(--paper); border-color:var(--paper); }
+        nav button:hover,nav button.active { background:var(--paper); color:var(--ink); }
+        main { flex:1; padding:28px; min-width:0; }
+        .view { max-width:1160px; margin:0 auto; animation:show .2s ease-out; }
+        @keyframes show { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+        h1,h2 { border-bottom:2px solid var(--ink); padding-bottom:8px; margin-top:0; }
+        .panel { background:var(--paper); border:2px solid var(--ink); padding:20px; margin-top:18px; }
+        .intro { color:var(--muted); line-height:1.5; max-width:760px; }
+        .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+        .full { grid-column:1/-1; }
+        label { display:block; font-weight:bold; margin-bottom:6px; }
+        input,select { width:100%; padding:10px; border:2px solid var(--ink); background:var(--paper); }
+        .hint { color:var(--muted); font-size:11px; margin-top:5px; }
+        .status { display:none; border:1px dashed var(--ink); padding:10px; margin-top:14px; }
+        .status.error { color:var(--danger); border-color:var(--danger); }
+        .toolbar { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+        .toolbar-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .operator-badge { padding:8px 10px; border:1px solid var(--ink); background:var(--paper); font-size:12px; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; min-width:1040px; }
+        th,td { border:2px solid var(--ink); padding:10px; text-align:left; vertical-align:top; }
+        th { background:var(--ink); color:var(--paper); }
+        td small { display:block; color:var(--muted); margin-top:4px; }
+        .action-cell { min-width:250px; }
+        .action-cell button { margin:0 5px 5px 0; padding:7px 9px; }
+        .empty { border:2px dashed var(--ink); padding:24px; }
+        .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:18px; }
+        .stat { background:var(--paper); border:2px solid var(--ink); padding:14px; }
+        .stat strong { display:block; font-size:24px; margin-top:6px; }
+        .qr-panel { display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+        .qr-panel canvas { width:220px; height:220px; border:8px solid var(--paper); outline:2px solid var(--ink); image-rendering:pixelated; }
+        .qr-copy { min-width:280px; flex:1; }
+        .qr-copy input { margin:8px 0; }
+        .qr-copy p { max-width:620px; line-height:1.5; }
+        .preview { position:fixed; inset:0; z-index:10; display:none; padding:3vh 4vw; background:rgba(17,17,17,.82); }
+        .preview.open { display:block; animation:show .18s ease-out; }
+        .preview-card { height:94vh; display:flex; flex-direction:column; background:var(--paper); border:3px solid var(--ink); box-shadow:12px 12px 0 rgba(0,0,0,.35); }
+        .preview-head { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 18px; border-bottom:2px solid var(--ink); background:var(--paper); }
+        .preview-head strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:16px; }
+        .preview-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .preview-meta { display:flex; gap:10px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid #bbb; background:#fafafa; font-size:12px; }
+        .preview-meta span { padding:6px 8px; border:1px solid var(--ink); }
+        .preview-frame { flex:1; width:100%; min-height:0; border:0; background:#eee; }
+        @media(max-width:760px) { .app{display:block;} aside{width:100%;} nav{grid-template-columns:1fr 1fr;} main{padding:16px;} .grid{grid-template-columns:1fr;} .full{grid-column:auto;} .preview{padding:1vh 1vw;} .preview-head{align-items:flex-start; flex-direction:column;} .preview-meta{font-size:10px;} }
+    </style>
+</head>
+<body>
+<div class="app">
+    <aside>
+        <h1 class="brand">PRINT<br>ASSISTANCE<span class="admin-label">ADMIN PANEL</span></h1>
+        <nav aria-label="Admin navigation">
+            <button data-view="queue">Operator Print Queue</button>
+            <button data-view="history">Task History</button>
+        </nav>
+    </aside>
+    <main id="mainContent"></main>
+</div>
+<div class="preview" id="pdfPreview" aria-hidden="true">
+    <div class="preview-card">
+        <div class="preview-head"><strong id="previewTitle">PDF print center</strong><div class="preview-actions"><button id="printPreviewButton">Print</button><button id="downloadPreviewButton">Download PDF</button><button id="closePreviewButton">Close</button></div></div>
+        <div class="preview-meta" id="previewMeta"></div>
+        <iframe id="previewFrame" class="preview-frame" title="PDF print preview"></iframe>
+    </div>
+</div>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAQiP4c0V3KdElxiPmp85vNJz9fEgg5Cao",
+        authDomain: "print-request-system-bce8b.firebaseapp.com",
+        projectId: "print-request-system-bce8b",
+        appId: "1:292635239891:web:c8048d1ca3e74fdf37bb26"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app, "print-app");
+    const auth = getAuth(app);
+    const mainContent = document.getElementById("mainContent");
+    const preview = document.getElementById("pdfPreview");
+    const previewFrame = document.getElementById("previewFrame");
+    const previewTitle = document.getElementById("previewTitle");
+    const previewMeta = document.getElementById("previewMeta");
+    const downloadPreviewButton = document.getElementById("downloadPreviewButton");
+    let currentUser = null;
+    let operatorProfile = null;
+    let jobs = [];
+    let stopListener = null;
+    let currentPrintJob = null;
+    let activeView = sessionStorage.getItem("print-admin-view") || "queue";
+
+    const normalizeUsername = (value) => String(value || "").trim().toLowerCase();
+    const validUsername = (value) => /^[a-z0-9][a-z0-9._-]{2,38}$/.test(value);
+    const qrCodeModuleUrl = "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm";
+    const isPasswordAccount = () => Boolean(currentUser?.providerData?.some((provider) => provider.providerId === "password"));
+    const isOperator = () => Boolean(isPasswordAccount() && operatorProfile?.operatorId === currentUser?.uid && operatorProfile?.active !== false);
+    const fileLink = (job) => job.pdfDataUrl || job.pdfRawString || "";
+    const dateText = (value) => { if (!value) return "Not available"; const date = value.toDate ? value.toDate() : new Date(value); return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString(); };
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[char]));
+    const sortJobs = (snapshot) => snapshot.docs.map((item) => ({ id:item.id, ...item.data() })).sort((a,b) => ((b.submittedAt || b.timestamp)?.toMillis?.() || 0) - ((a.submittedAt || a.timestamp)?.toMillis?.() || 0));
+    const assignedToMe = (job) => job.operatorHidden !== true && (!job.recipientOperatorId || job.recipientOperatorId === currentUser?.uid);
+    const setStatus = (element, message, error = false) => { if (!element) return; element.textContent = message; element.style.display = "block"; element.classList.toggle("error", error); };
+
+    function renderLogin(message = "") {
+        mainContent.innerHTML = `<section class="view"><h1>Operator Print Queue Monitor</h1><form class="panel" id="authForm"><h2>Operator sign in</h2><div class="grid"><div class="full"><label for="operatorUsername">Unique operator username</label><input id="operatorUsername" maxlength="40" pattern="[a-z0-9][a-z0-9._-]{2,38}" placeholder="e.g. printdesk1"><div class="hint">Required when registering or when an existing operator account claims its username. Customers choose this username when sending requests.</div></div><div class="full"><label for="operatorEmail">Email</label><input id="operatorEmail" type="email" required autocomplete="username"></div><div class="full"><label for="operatorPassword">Password</label><input id="operatorPassword" type="password" minlength="6" required autocomplete="current-password"></div><div><button class="primary" type="submit">Sign in</button></div><div><button type="button" id="registerButton">Register operator</button></div><div class="full"><div id="authStatus" class="status"></div></div></div></form>${message ? `<div class="panel">${escapeHtml(message)}</div>` : ""}</section>`;
+        document.getElementById("authForm").addEventListener("submit", (event) => authenticate(event, false));
+        document.getElementById("registerButton").addEventListener("click", () => authenticate(null, true));
+    }
+
+    function signedInHeader(title, intro) {
+        return `<div class="toolbar"><div><h1>${title}</h1><p class="intro">${intro}</p></div><div class="toolbar-actions"><span class="operator-badge">@${escapeHtml(operatorProfile.username)}<br>${escapeHtml(currentUser.email)}</span><button id="signOutButton">Sign out</button></div></div>`;
+    }
+
+    function downloadQrCode() {
+        const canvas = document.getElementById("operatorQr");
+        if (!canvas || !operatorProfile) return;
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = `print-assistance-${operatorProfile.username}-qr.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    function customerUploadUrl() {
+        const url = new URL("https://print-request-system-bce8b.web.app/");
+        url.searchParams.set("operator", operatorProfile.username);
+        return url.toString();
+    }
+
+    async function renderQrPanel() {
+        const area = document.getElementById("qrPanel");
+        if (!area || !isOperator()) return;
+        const target = customerUploadUrl();
+        area.innerHTML = `<div class="qr-panel"><canvas id="operatorQr" width="220" height="220" aria-label="QR code for @${escapeHtml(operatorProfile.username)}"></canvas><div class="qr-copy"><h2>Your customer QR code</h2><p><strong>QR status: Active</strong></p><p>People who scan this code go directly to your upload page. Their requests are assigned only to <strong>@${escapeHtml(operatorProfile.username)}</strong>.</p><label for="operatorShareUrl">Customer upload link</label><input id="operatorShareUrl" value="${escapeHtml(target)}" readonly><div class="toolbar-actions"><button id="copyQrLink">Copy link</button><button id="downloadQrButton">Download QR PNG</button><button id="toggleQrButton" type="button">Hide QR Code</button><a href="${escapeHtml(target)}" target="_blank" rel="noopener"><button type="button">Open upload page</button></a></div></div></div>`;
+        const canvas = document.getElementById("operatorQr");
+        try {
+            const { default: QRCode } = await import(qrCodeModuleUrl);
+            await QRCode.toCanvas(canvas, target, { width:220, margin:1, color:{ dark:"#111111", light:"#ffffff" } });
+        } catch (error) {
+            canvas.replaceWith(Object.assign(document.createElement("div"), { className:"empty", textContent:"QR code could not be generated. Use the customer upload link below." }));
+            console.error("QR code generation failed", error);
+        }
+        document.getElementById("copyQrLink").addEventListener("click", async () => { try { await navigator.clipboard.writeText(target); document.getElementById("copyQrLink").textContent = "Copied"; } catch (error) { document.getElementById("operatorShareUrl").select(); document.execCommand("copy"); document.getElementById("copyQrLink").textContent = "Copied"; } });
+        document.getElementById("downloadQrButton").addEventListener("click", downloadQrCode);
+        document.getElementById("toggleQrButton").addEventListener("click", () => { const hidden = canvas.style.display === "none"; canvas.style.display = hidden ? "block" : "none"; document.getElementById("toggleQrButton").textContent = hidden ? "Hide QR Code" : "Show QR Code"; });
+    }
+
+    function renderQueue() {
+        if (!isOperator()) return renderLogin(currentUser && isPasswordAccount() ? "This account has no active operator username. Register an operator profile before receiving requests." : "");
+        mainContent.innerHTML = `<section class="view">${signedInHeader("Operator Print Queue Monitor", `Requests addressed to @${operatorProfile.username} appear here.`)}<div class="stats" id="queueStats"></div><div class="panel" id="qrPanel"></div><div class="panel"><h2>Pending print requests</h2><div id="queueArea"></div></div></section>`;
+        document.getElementById("signOutButton").addEventListener("click", async () => { await signOut(auth); });
+        renderQrPanel();
+        renderQueueStats();
+        renderQueueTable();
+    }
+
+    function renderHistory() {
+        if (!isOperator()) return renderLogin("Sign in with an operator account to view assigned task history.");
+        mainContent.innerHTML = `<section class="view">${signedInHeader("Task History", `Completed and pending requests addressed to @${operatorProfile.username} remain recorded here.`)}<div class="panel"><div class="toolbar-actions"><label for="historyStatus">Show</label><select id="historyStatus"><option value="all">All tasks</option><option value="Pending">Pending only</option><option value="Completed">Completed only</option></select><button id="clearOperatorHistory">Clear Completed History</button></div><div id="historyArea"></div></div></section>`;
+        document.getElementById("signOutButton").addEventListener("click", async () => { await signOut(auth); });
+        document.getElementById("historyStatus").addEventListener("change", renderHistoryTable);
+        document.getElementById("clearOperatorHistory").addEventListener("click", clearOperatorHistory);
+        renderHistoryTable();
+    }
+
+    function rowMarkup(job, history = false) {
+        const status = job.status || "Pending";
+        const recipient = job.recipientUsername ? `@${job.recipientUsername}` : "Legacy / unassigned";
+        const details = `<td>${escapeHtml(job.requestCode || job.id.slice(0, 8).toUpperCase())}</td><td>${escapeHtml(job.fileName || "Unnamed PDF")}</td><td>${escapeHtml(job.requesterName || job.submittedByName || "Name not recorded")}</td><td>${escapeHtml(recipient)}</td><td>${dateText(job.submittedAt || job.timestamp)}</td><td>${escapeHtml(job.copiesCount || "1")}</td><td>${escapeHtml(job.colorSetting || "Black & White")}</td><td>${escapeHtml(job.sidesSetting || "Single-Sided")}</td>`;
+        return `<tr>${details}${history ? `<td>${escapeHtml(status)}<small>${status === "Completed" ? `Completed: ${dateText(job.completedAt)}` : "Waiting for operator"}</small></td>` : `<td class="action-cell"><button data-open-job="${job.id}">Open / Print</button><button data-download-job="${job.id}">Download PDF</button><button data-complete-job="${job.id}">Mark Completed</button></td>`}</tr>`;
+    }
+
+    function tableMarkup(list, history = false) {
+        if (!list.length) return "<div class=\"empty\">No tasks to display.</div>";
+        return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Document</th><th>Submitted by</th><th>Sent to</th><th>Submitted at</th><th>Copies</th><th>Color</th><th>Sides</th>${history ? "<th>Status</th>" : "<th>Actions</th>"}</tr></thead><tbody>${list.map((job) => rowMarkup(job, history)).join("")}</tbody></table></div>`;
+    }
+
+    function renderQueueStats() {
+        const area = document.getElementById("queueStats");
+        if (!area) return;
+        const assigned = jobs.filter(assignedToMe);
+        const pending = assigned.filter((job) => (job.status || "Pending") === "Pending").length;
+        const completed = assigned.filter((job) => (job.status || "Pending") === "Completed").length;
+        const today = new Date().toDateString();
+        const todayCount = assigned.filter((job) => { const value = job.submittedAt || job.timestamp; const date = value?.toDate ? value.toDate() : new Date(value); return !Number.isNaN(date.getTime()) && date.toDateString() === today; }).length;
+        area.innerHTML = `<div class="stat">Pending<strong>${pending}</strong></div><div class="stat">Completed<strong>${completed}</strong></div><div class="stat">Received today<strong>${todayCount}</strong></div>`;
+    }
+
+    function renderQueueTable() {
+        const area = document.getElementById("queueArea");
+        if (!area) return;
+        const pending = jobs.filter(assignedToMe).filter((job) => (job.status || "Pending") === "Pending");
+        area.innerHTML = tableMarkup(pending, false);
+        renderQueueStats();
+        bindActions(area);
+    }
+
+    function renderHistoryTable() {
+        const area = document.getElementById("historyArea");
+        if (!area) return;
+        const filter = document.getElementById("historyStatus")?.value || "all";
+        const assigned = jobs.filter(assignedToMe);
+        area.innerHTML = tableMarkup(filter === "all" ? assigned : assigned.filter((job) => (job.status || "Pending") === filter), true);
+    }
+
+    async function clearOperatorHistory() {
+        const completed = jobs.filter((job) => assignedToMe(job) && (job.status || "Pending") === "Completed");
+        if (!completed.length || !confirm("Clear completed tasks from your operator history?")) return;
+        try {
+            await Promise.all(completed.map((job) => updateDoc(doc(db, "print_jobs", job.id), { operatorHidden:true })));
+            renderHistoryTable();
+        } catch (error) {
+            alert(`Could not clear history: ${error.message}`);
+        }
+    }
+
+    function bindActions(area) {
+        area.querySelectorAll("[data-open-job]").forEach((button) => button.addEventListener("click", () => openPreview(button.dataset.openJob)));
+        area.querySelectorAll("[data-download-job]").forEach((button) => button.addEventListener("click", () => downloadJob(button.dataset.downloadJob)));
+        area.querySelectorAll("[data-complete-job]").forEach((button) => button.addEventListener("click", () => completeJob(button.dataset.completeJob)));
+    }
+
+    function closePreview() {
+        preview.classList.remove("open");
+        preview.setAttribute("aria-hidden", "true");
+        previewFrame.removeAttribute("src");
+        currentPrintJob = null;
+    }
+
+    function openPreview(id) {
+        const job = jobs.find((item) => item.id === id && assignedToMe(item));
+        if (!job || !fileLink(job)) return;
+        currentPrintJob = job;
+        previewTitle.textContent = job.fileName || "PDF print preview";
+        previewMeta.innerHTML = `<span><b>Request:</b> ${escapeHtml(job.requestCode || job.id.slice(0, 8).toUpperCase())}</span><span><b>Submitted by:</b> ${escapeHtml(job.requesterName || "Unknown requester")}</span><span><b>Copies:</b> ${escapeHtml(job.copiesCount || "1")}</span><span><b>Color:</b> ${escapeHtml(job.colorSetting || "Black & White")}</span><span><b>Sides:</b> ${escapeHtml(job.sidesSetting || "Single-Sided")}</span>`;
+        previewFrame.src = fileLink(job);
+        preview.classList.add("open");
+        preview.setAttribute("aria-hidden", "false");
+    }
+    function downloadJob(id) { const job = jobs.find((item) => item.id === id && assignedToMe(item)); if (!job || !fileLink(job)) return; const link = document.createElement("a"); link.href = fileLink(job); link.download = job.fileName || "print-document.pdf"; document.body.appendChild(link); link.click(); link.remove(); }
+    async function completeJob(id) { const job = jobs.find((item) => item.id === id && assignedToMe(item)); if (!job || !isOperator() || !confirm(`Mark ${job.fileName || "this task"} as completed?`)) return; try { await updateDoc(doc(db, "print_jobs", id), { status:"Completed", completedAt:serverTimestamp(), completedBy:currentUser.email, completedByUsername:operatorProfile.username }); } catch (error) { alert(`Could not update task: ${error.message}`); } }
+
+    async function loadOperatorProfile(user) {
+        operatorProfile = null;
+        if (!user || !isPasswordAccount()) return;
+        try {
+            const profile = await getDoc(doc(db, "operator_profiles", user.uid));
+            if (profile.exists()) operatorProfile = { id:profile.id, ...profile.data(), username:normalizeUsername(profile.data().username) };
+        } catch (error) { console.error("Operator profile lookup failed", error); }
+    }
+
+    async function saveOperatorProfile(user, username) {
+        const existingUsername = await getDoc(doc(db, "operator_usernames", username));
+        if (existingUsername.exists() && existingUsername.data().operatorId !== user.uid) throw new Error("That operator username is already taken. Choose another one.");
+        await setDoc(doc(db, "operator_profiles", user.uid), { username, operatorId:user.uid, email:user.email, active:true, createdAt:serverTimestamp() });
+        await setDoc(doc(db, "operator_usernames", username), { username, operatorId:user.uid, email:user.email, active:true, createdAt:serverTimestamp() });
+        operatorProfile = { username, operatorId:user.uid, email:user.email, active:true };
+    }
+
+    async function authenticate(event, register) {
+        if (event) event.preventDefault();
+        const email = document.getElementById("operatorEmail").value.trim();
+        const password = document.getElementById("operatorPassword").value;
+        const username = normalizeUsername(document.getElementById("operatorUsername").value);
+        const status = document.getElementById("authStatus");
+        if (!email || !password) return setStatus(status, "Enter your operator email and password.", true);
+        if (!register && username && !validUsername(username)) return setStatus(status, "Use 3–39 lowercase letters, numbers, dots, underscores, or hyphens for the username.", true);
+        if (register && !validUsername(username)) return setStatus(status, "Use 3–39 lowercase letters, numbers, dots, underscores, or hyphens for the username.", true);
+        try {
+            setStatus(status, register ? "Registering operator..." : "Signing in...");
+            if (register) {
+                const credential = await createUserWithEmailAndPassword(auth, email, password);
+                await saveOperatorProfile(credential.user, username);
+            } else {
+                await signInWithEmailAndPassword(auth, email, password);
+                await loadOperatorProfile(auth.currentUser);
+                if (!operatorProfile) {
+                    if (!validUsername(username)) return setStatus(status, "This operator account needs a unique username. Enter one above, then sign in again.", true);
+                    await saveOperatorProfile(auth.currentUser, username);
+                }
+            }
+            activeView = "queue";
+            sessionStorage.setItem("print-admin-view", activeView);
+            startListener(auth.currentUser);
+            render();
+        } catch (error) { setStatus(status, error.message.replace("Firebase: ", ""), true); }
+    }
+
+    function startListener(user) {
+        if (stopListener) { stopListener(); stopListener = null; }
+        jobs = [];
+        if (!user || !isOperator()) return;
+        stopListener = onSnapshot(query(collection(db, "print_jobs"), where("recipientOperatorId", "==", user.uid)), (snapshot) => { jobs = sortJobs(snapshot); if (activeView === "queue") renderQueueTable(); if (activeView === "history") renderHistoryTable(); }, (error) => console.error("Admin queue listener failed", error));
+    }
+
+    function render() { document.querySelectorAll("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === activeView)); if (!isOperator()) renderLogin(); else if (activeView === "history") renderHistory(); else { activeView = "queue"; renderQueue(); } }
+    document.querySelectorAll("nav button").forEach((button) => button.addEventListener("click", () => { activeView = button.dataset.view; sessionStorage.setItem("print-admin-view", activeView); history.replaceState(null, "", location.pathname + location.search); render(); }));
+    document.getElementById("closePreviewButton").addEventListener("click", closePreview);
+    document.getElementById("printPreviewButton").addEventListener("click", () => { if (previewFrame.contentWindow) { previewFrame.contentWindow.focus(); previewFrame.contentWindow.print(); } });
+    preview.addEventListener("click", (event) => { if (event.target === preview) closePreview(); });
+    onAuthStateChanged(auth, async (user) => { currentUser = user; await loadOperatorProfile(user); startListener(user); render(); });
+    render();
+</script>
+</body>
+</html>

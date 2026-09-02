@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Print Assistance</title>
+    <style>
+        :root { --ink: #111111; --paper: #ffffff; --muted: #666666; --line: #d8d8d8; --soft: #f4f4f4; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: monospace; color: var(--ink); background: var(--soft); }
+        button, input, select { font: inherit; }
+        button, a.button { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 10px 14px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; }
+        button:hover, a.button:hover { background: var(--ink); color: var(--paper); }
+        button.primary { background: var(--ink); color: var(--paper); }
+        button.primary:hover { background: var(--paper); color: var(--ink); }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 245px; flex: 0 0 245px; background: var(--ink); color: var(--paper); padding: 22px 16px; }
+        .brand { margin: 0 0 28px; padding-bottom: 18px; border-bottom: 2px solid var(--paper); font-size: 21px; line-height: 1.25; }
+        .brand small { display: block; margin-top: 8px; font-size: 11px; font-weight: normal; opacity: .75; }
+        .nav { display: grid; gap: 8px; }
+        .nav button { width: 100%; text-align: left; border-color: var(--paper); background: transparent; color: var(--paper); }
+        .nav button:hover, .nav button.active { background: var(--paper); color: var(--ink); }
+        #operatorNav { display: none; }
+        .sidebar-note { margin-top: 28px; padding-top: 16px; border-top: 1px solid #777; color: #cccccc; font-size: 11px; line-height: 1.5; }
+        .main { flex: 1; min-width: 0; padding: 26px; }
+        .view { max-width: 1120px; margin: 0 auto; animation: appear .22s ease-out; }
+        @keyframes appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        h1, h2, h3 { margin-top: 0; border-bottom: 2px solid var(--ink); padding-bottom: 9px; }
+        .intro { max-width: 720px; color: var(--muted); line-height: 1.55; }
+        .panel { border: 2px solid var(--ink); background: var(--paper); padding: 20px; margin-top: 18px; }
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .full { grid-column: 1 / -1; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; }
+        input[type="text"], input[type="email"], input[type="password"], input[type="file"], input[type="number"], select { width: 100%; padding: 10px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
+        .hint { color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 5px; }
+        .status { border: 1px dashed var(--ink); padding: 10px; margin-top: 14px; display: none; }
+        .status.error { border-color: #9b0000; color: #9b0000; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .operator-badge { font-size: 12px; padding: 7px 10px; border: 1px solid var(--ink); background: var(--soft); }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; min-width: 800px; }
+        th, td { border: 2px solid var(--ink); padding: 10px; text-align: left; vertical-align: top; }
+        th { background: var(--ink); color: var(--paper); }
+        td small { display: block; color: var(--muted); margin-top: 4px; }
+        .action-cell { min-width: 220px; }
+        .action-cell button { margin: 0 5px 5px 0; padding: 7px 9px; }
+        .empty { padding: 24px; border: 2px dashed var(--ink); margin-top: 16px; background: var(--paper); }
+        .history-filter { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .preview { position: fixed; inset: 0; z-index: 10; background: rgba(17,17,17,.75); display: none; padding: 4vh 5vw; }
+        .preview.open { display: block; animation: appear .18s ease-out; }
+        .preview-card { height: 92vh; background: var(--paper); border: 3px solid var(--ink); display: flex; flex-direction: column; }
+        .preview-head { padding: 12px; border-bottom: 2px solid var(--ink); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .preview-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .preview-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .preview-frame { flex: 1; width: 100%; border: 0; background: #eeeeee; }
+        .user-line { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+        @media (max-width: 760px) { .app-shell { display: block; } .sidebar { width: 100%; } .nav { grid-template-columns: repeat(3, 1fr); } .main { padding: 16px; } .form-grid { grid-template-columns: 1fr; } .full { grid-column: auto; } .preview { padding: 2vh 2vw; } }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <h1 class="brand">PRINT<br>ASSISTANCE</h1>
+        <nav class="nav" aria-label="Application navigation">
+            <button data-view="submit" class="active">Submit a Print Request</button>
+            <button data-view="operator" id="operatorNav">Operator Print Queue</button>
+            <button data-view="history">My Request History</button>
+        </nav>
+    </aside>
+    <main class="main" id="mainContent"></main>
+</div>
+
+<div class="preview" id="pdfPreview" aria-hidden="true">
+    <div class="preview-card">
+        <div class="preview-head">
+            <strong id="previewTitle">PDF preview</strong>
+            <div class="preview-actions">
+                <button id="printPreviewButton" class="primary">Print PDF</button>
+                <button id="downloadPreviewButton">Download PDF</button>
+                <button id="closePreviewButton">Close</button>
+            </div>
+        </div>
+        <iframe id="previewFrame" class="preview-frame" title="PDF preview"></iframe>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, where, onSnapshot, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAQiP4c0V3KdElxiPmp85vNJz9fEgg5Cao",
+        authDomain: "print-request-system-bce8b.firebaseapp.com",
+        projectId: "print-request-system-bce8b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app, "print-app");
+    const auth = getAuth(app);
+    const mainContent = document.getElementById("mainContent");
+    const preview = document.getElementById("pdfPreview");
+    const previewFrame = document.getElementById("previewFrame");
+    const previewTitle = document.getElementById("previewTitle");
+    const downloadPreviewButton = document.getElementById("downloadPreviewButton");
+    const legacyView = location.hash.replace("#", "");
+    let activeView = sessionStorage.getItem("print-assistance-view") || legacyView || "submit";
+    if (!["submit", "operator", "history"].includes(activeView)) activeView = "submit";
+    if (location.hash) history.replaceState(null, "", `${location.pathname}${location.search}`);
+    sessionStorage.setItem("print-assistance-view", activeView);
+    let currentUser = null;
+    let allJobs = [];
+    let stopJobsListener = null;
+    let currentPreview = null;
+    let anonymousSignIn = signInAnonymously(auth).catch((error) => console.error("Anonymous sign-in failed", error));
+
+    async function ensureCustomerSession() {
+        if (isOperator()) return currentUser;
+        if (auth.currentUser) return auth.currentUser;
+        await signInAnonymously(auth);
+        return auth.currentUser;
+    }
+
+    const escapeDate = (value) => {
+        if (!value) return "Not available";
+        const date = value.toDate ? value.toDate() : new Date(value);
+        return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString();
+    };
+
+    const providerIsPassword = (user) => Boolean(user?.providerData?.some((provider) => provider.providerId === "password"));
+    const isOperator = () => providerIsPassword(currentUser);
+    const fileLink = (job) => job.pdfDataUrl || job.pdfRawString || "";
+
+    function setStatus(element, message, error = false) {
+        element.textContent = message;
+        element.style.display = "block";
+        element.classList.toggle("error", error);
+    }
+
+    function renderSubmit() {
+        mainContent.innerHTML = `
+            <section class="view">
+                <h1>Submit a Print Request</h1>
+                <form class="panel" id="requestForm">
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label for="requesterName">Your name</label>
+                            <input type="text" id="requesterName" maxlength="80" required placeholder="Enter the name the operator should see">
+                            <div class="hint">This name will be shown with your file in the operator queue and task history.</div>
+                        </div>
+                        <div class="form-group full">
+                            <label for="pdfFile">Select Document (PDF only)</label>
+                            <input type="file" id="pdfFile" accept="application/pdf,.pdf" required>
+                        </div>
+                        <div>
+                            <label for="printCopies">Number of Copies</label>
+                            <input type="number" id="printCopies" value="1" min="1" max="99" required>
+                        </div>
+                        <div>
+                            <label for="printColor">Color Configuration</label>
+                            <select id="printColor"><option value="Black & White">Black & White</option><option value="Full Color">Full Color</option></select>
+                        </div>
+                        <div>
+                            <label for="printSides">Sides</label>
+                            <select id="printSides"><option value="Single-Sided">Single-Sided</option><option value="Double-Sided (Duplex)">Double-Sided (Duplex)</option></select>
+                        </div>
+                        <div class="full"><button class="primary" type="submit">Send to Printing Machine</button><div class="status" id="requestStatus"></div></div>
+                    </div>
+                </form>
+            </section>`;
+        document.getElementById("requestForm").addEventListener("submit", submitRequest);
+    }
+
+    function renderOperatorLogin(message = "") {
+        mainContent.innerHTML = `
+            <section class="view">
+                <h1>Operator Print Queue Monitor</h1>
+                <form class="panel" id="operatorAuthForm">
+                    <h2>Operator access</h2>
+                    <div class="form-grid">
+                        <div class="full"><label for="operatorEmail">Operator email</label><input type="email" id="operatorEmail" required autocomplete="username"></div>
+                        <div class="full"><label for="operatorPassword">Password</label><input type="password" id="operatorPassword" minlength="6" required autocomplete="current-password"><div class="hint">Use at least 6 characters for a new operator account.</div></div>
+                        <div><button type="submit" class="primary" data-auth-action="login">Sign in</button></div>
+                        <div><button type="button" data-auth-action="register">Register operator</button></div>
+                        <div class="full"><div class="status" id="operatorAuthStatus"></div></div>
+                    </div>
+                </form>
+                ${message ? `<div class="panel">${message}</div>` : ""}
+            </section>`;
+        document.getElementById("operatorAuthForm").addEventListener("submit", (event) => authenticateOperator(event, "login"));
+        document.querySelector('[data-auth-action="register"]').addEventListener("click", () => authenticateOperator(null, "register"));
+    }
+
+    function renderOperatorArea() {
+        if (!isOperator()) { renderOperatorLogin(); return; }
+        mainContent.innerHTML = `
+            <section class="view">
+                <div class="toolbar"><div><h1>Operator Print Queue Monitor</h1><p class="intro">Every request keeps the submitter name, upload time, and the exact print settings selected by the user.</p></div><div><span class="operator-badge">Signed in: ${currentUser.email}</span><button id="operatorSignOut">Sign out</button></div></div>
+                <div class="panel"><h2>Pending print requests</h2><div id="queueArea"></div></div>
+            </section>`;
+        document.getElementById("operatorSignOut").addEventListener("click", async () => { await signOut(auth); activeView = "operator"; render(); });
+        renderQueue();
+    }
+
+    function renderHistory() {
+        const customerHistory = !isOperator();
+        mainContent.innerHTML = `
+            <section class="view">
+                <div class="toolbar"><div><h1>${customerHistory ? "My Request History" : "Task History"}</h1>${customerHistory ? "" : `<p class="intro">A permanent record of all submitted print tasks, including completed jobs. Completing a job removes it from the queue but not from history.</p>`}</div><div>${customerHistory ? "" : `<span class="operator-badge">${currentUser.email}</span>`}</div></div>
+                <div class="panel"><div class="history-filter"><label for="historyStatus">Show</label><select id="historyStatus"><option value="all">All my requests</option><option value="Pending">Pending only</option><option value="Completed">Completed only</option></select></div><div id="historyArea"></div></div>
+            </section>`;
+        document.getElementById("historyStatus").addEventListener("change", renderHistoryTable);
+        renderHistoryTable();
+    }
+
+    function jobRows(jobs, includeStatus = false) {
+        if (!jobs.length) return `<div class="empty">No tasks to display.</div>`;
+        return `<div class="table-wrap"><table><thead><tr><th>Document</th><th>Submitted by</th><th>Submitted at</th><th>Copies</th><th>Color</th><th>Sides</th>${includeStatus ? "<th>Status</th>" : "<th>Action</th>"}</tr></thead><tbody>${jobs.map((job) => {
+            const id = job.id;
+            const status = job.status || "Pending";
+            return `<tr><td>${job.fileName || "Unnamed PDF"}</td><td>${job.requesterName || job.submittedByName || "Name not recorded"}</td><td>${escapeDate(job.submittedAt || job.timestamp)}</td><td>${job.copiesCount || "1"}</td><td>${job.colorSetting || "Black & White"}</td><td>${job.sidesSetting || "Single-Sided"}</td>${includeStatus ? `<td>${status}<small>${status === "Completed" ? `Completed: ${escapeDate(job.completedAt)}` : "Waiting for operator"}</small></td>` : `<td class="action-cell"><button data-open-job="${id}">Open / Print</button><button data-download-job="${id}">Download PDF</button><button data-complete-job="${id}">Mark Completed</button></td>`}</tr>`;
+        }).join("")}</tbody></table></div>`;
+    }
+
+    function renderQueue() {
+        const area = document.getElementById("queueArea");
+        if (!area) return;
+        const pending = allJobs.filter((job) => (job.status || "Pending") === "Pending");
+        area.innerHTML = jobRows(pending, false);
+        bindJobActions(area);
+    }
+
+    function renderHistoryTable() {
+        const area = document.getElementById("historyArea");
+        if (!area) return;
+        const filter = document.getElementById("historyStatus")?.value || "all";
+        const jobs = filter === "all" ? allJobs : allJobs.filter((job) => (job.status || "Pending") === filter);
+        area.innerHTML = jobRows(jobs, true);
+    }
+
+    function bindJobActions(area) {
+        area.querySelectorAll("[data-open-job]").forEach((button) => button.addEventListener("click", () => openPreview(button.dataset.openJob)));
+        area.querySelectorAll("[data-download-job]").forEach((button) => button.addEventListener("click", () => downloadJob(button.dataset.downloadJob)));
+        area.querySelectorAll("[data-complete-job]").forEach((button) => button.addEventListener("click", () => completeJob(button.dataset.completeJob)));
+    }
+
+    function openPreview(id) {
+        const job = allJobs.find((item) => item.id === id);
+        if (!job || !fileLink(job)) return;
+        currentPreview = job;
+        previewTitle.textContent = `${job.fileName || "PDF"} — ${job.requesterName || "Unknown requester"}`;
+        previewFrame.src = fileLink(job);
+        downloadPreviewButton.onclick = () => downloadJob(id);
+        preview.classList.add("open");
+        preview.setAttribute("aria-hidden", "false");
+    }
+
+    function closePreview() {
+        preview.classList.remove("open");
+        preview.setAttribute("aria-hidden", "true");
+        previewFrame.src = "about:blank";
+        currentPreview = null;
+    }
+
+    function downloadJob(id) {
+        const job = allJobs.find((item) => item.id === id);
+        if (!job || !fileLink(job)) return;
+        const link = document.createElement("a");
+        link.href = fileLink(job);
+        link.download = job.fileName || "print-document.pdf";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    async function completeJob(id) {
+        const job = allJobs.find((item) => item.id === id);
+        if (!job || !isOperator() || !confirm(`Mark ${job.fileName || "this task"} as completed? It will remain in Task History.`)) return;
+        try { await updateDoc(doc(db, "print_jobs", id), { status: "Completed", completedAt: serverTimestamp(), completedBy: currentUser.email }); }
+        catch (error) { alert(`Could not update task: ${error.message}`); }
+    }
+
+    async function authenticateOperator(event, action) {
+        if (event) event.preventDefault();
+        const email = document.getElementById("operatorEmail").value.trim();
+        const password = document.getElementById("operatorPassword").value;
+        const status = document.getElementById("operatorAuthStatus");
+        try {
+            setStatus(status, action === "register" ? "Registering operator account..." : "Signing in...");
+            if (action === "register") await createUserWithEmailAndPassword(auth, email, password);
+            else await signInWithEmailAndPassword(auth, email, password);
+            activeView = "operator";
+            render();
+        } catch (error) { setStatus(status, error.message.replace("Firebase: ", ""), true); }
+    }
+
+    async function submitRequest(event) {
+        event.preventDefault();
+        const status = document.getElementById("requestStatus");
+        const requesterName = document.getElementById("requesterName").value.trim();
+        const file = document.getElementById("pdfFile").files[0];
+        if (!requesterName) return setStatus(status, "Please enter your name.", true);
+        if (!file || file.type !== "application/pdf") return setStatus(status, "Please select a PDF document.", true);
+        if (file.size > 700000) return setStatus(status, "To stay on the free plan, the PDF must be under 700 KB.", true);
+        try {
+            setStatus(status, "Preparing your PDF request...");
+            const sessionUser = await ensureCustomerSession();
+            const pdfDataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+            setStatus(status, "Sending request to the operator queue...");
+            await addDoc(collection(db, "print_jobs"), { fileName: file.name, pdfDataUrl, requesterId: sessionUser.uid, requesterName, submittedByName: requesterName, copiesCount: document.getElementById("printCopies").value, colorSetting: document.getElementById("printColor").value, sidesSetting: document.getElementById("printSides").value, status: "Pending", submittedAt: serverTimestamp(), timestamp: serverTimestamp() });
+            setStatus(status, "Success: your request was sent to the operator queue.");
+            document.getElementById("requestForm").reset();
+            document.getElementById("printCopies").value = "1";
+        } catch (error) { console.error(error); setStatus(status, `System failure: ${error.message}`, true); }
+    }
+
+    function render() {
+        document.getElementById("operatorNav").style.display = isOperator() ? "block" : "none";
+        document.querySelectorAll(".nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === activeView));
+        if (activeView === "operator") renderOperatorArea();
+        else if (activeView === "history") renderHistory();
+        else { activeView = "submit"; renderSubmit(); }
+    }
+
+    document.querySelectorAll(".nav button").forEach((button) => button.addEventListener("click", () => { activeView = button.dataset.view; sessionStorage.setItem("print-assistance-view", activeView); const cleanPath = `${location.pathname}${location.search}`; history.replaceState(null, "", cleanPath); render(); }));
+    document.getElementById("closePreviewButton").addEventListener("click", closePreview);
+    document.getElementById("printPreviewButton").addEventListener("click", () => { if (previewFrame.contentWindow) previewFrame.contentWindow.print(); });
+    preview.addEventListener("click", (event) => { if (event.target === preview) closePreview(); });
+
+    function stopTaskListener() { if (stopJobsListener) { stopJobsListener(); stopJobsListener = null; } allJobs = []; }
+    function normalizeJobs(snapshot) { return snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => { const aTime = (a.submittedAt || a.timestamp)?.toMillis?.() || 0; const bTime = (b.submittedAt || b.timestamp)?.toMillis?.() || 0; return bTime - aTime; }); }
+    function startTaskListener() { if (stopJobsListener || !isOperator()) return; const jobsQuery = query(collection(db, "print_jobs")); stopJobsListener = onSnapshot(jobsQuery, (snapshot) => { allJobs = normalizeJobs(snapshot); if (activeView === "operator") renderQueue(); if (activeView === "history") renderHistoryTable(); }, (error) => console.error("Operator queue listener failed", error)); }
+    function startCustomerHistoryListener() { if (stopJobsListener || isOperator() || !currentUser) return; const ownJobsQuery = query(collection(db, "print_jobs"), where("requesterId", "==", currentUser.uid)); stopJobsListener = onSnapshot(ownJobsQuery, (snapshot) => { allJobs = normalizeJobs(snapshot); if (activeView === "history") renderHistoryTable(); }, (error) => console.error("Customer history listener failed", error)); }
+    onAuthStateChanged(auth, (user) => { currentUser = user; stopTaskListener(); if (isOperator()) startTaskListener(); else if (currentUser) startCustomerHistoryListener(); if (activeView === "operator" || activeView === "history") render(); else render(); });
+    render();
+</script>
+</body>
+</html>
